@@ -12,6 +12,11 @@ import kotlin.io.path.fileSize
 val guiMainClass = "net.rsprox.gui.ProxyToolGuiKt"
 val s3Bucket = "cdn.rsprox.net"
 
+val jitpack = System.getenv("JITPACK").toBoolean()
+val publishGroup = if (jitpack) "com.github.klepto.rsprox" else "net.rsprox"
+val publishVersion = providers.gradleProperty("version").orNull ?: "1.0.5"
+val publishedModules = setOf("proxy", "protocol", "patch", "transcriber", "cache", "shared")
+
 plugins {
     alias(libs.plugins.kotlin.jvm)
     `maven-publish`
@@ -20,8 +25,8 @@ plugins {
 allprojects {
     apply(plugin = "maven-publish")
 
-    group = "net.rsprox"
-    version = "1.0.5"
+    group = publishGroup
+    version = publishVersion
 
     repositories {
         mavenCentral()
@@ -51,12 +56,24 @@ allprojects {
 
     afterEvaluate {
         publishing {
+            if (path.split(":").getOrNull(1) in publishedModules) {
+                publications {
+                    create<MavenPublication>("mavenJava") {
+                        from(components["java"])
+                    }
+                }
+            }
+
             repositories {
-                maven {
-                    url = uri("s3://$s3Bucket/maven")
-                    credentials(AwsCredentials::class.java) {
-                        accessKey = System.getenv("AWS_ACCESS_KEY_ID")
-                        secretKey = System.getenv("AWS_SECRET_ACCESS_KEY")
+                val accessKeyId = System.getenv("AWS_ACCESS_KEY_ID")
+                val secretAccessKey = System.getenv("AWS_SECRET_ACCESS_KEY")
+                if (accessKeyId != null && secretAccessKey != null) {
+                    maven {
+                        url = uri("s3://$s3Bucket/maven")
+                        credentials(AwsCredentials::class.java) {
+                            accessKey = accessKeyId
+                            secretKey = secretAccessKey
+                        }
                     }
                 }
             }
